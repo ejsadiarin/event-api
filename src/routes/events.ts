@@ -1,15 +1,19 @@
 import { Router } from 'express';
-import { getEvents, registerForEvent, createEvent } from '../controllers/events';
+import { getEvents, registerForEvent, createEvent, getUserRegistrations, getEventSlots, checkEventRegistration } from '../controllers/events';
+import { verifyToken } from '../middleware/jwt.middleware';
 
 const router = Router();
 
-// GET /api/events
+// Public routes
 router.get('/', getEvents);
+router.get('/slots', getEventSlots);
+router.get('/slots/:id', getEventSlots);
 
-// POST /api/events
-router.post('/', createEvent);
+// Protected routes - require JWT authentication
+router.post('/', verifyToken, createEvent);
+router.post('/:id/register', verifyToken, registerForEvent);
+router.get('/user/registrations', verifyToken, getUserRegistrations);
 
-// POST /api/events/:id/register
-router.post('/:id/register', registerForEvent);
+router.get('/:id/check-registration', verifyToken, checkEventRegistration);
 
 export default router;

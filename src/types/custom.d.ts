@@ -1,9 +1,24 @@
-declare namespace Express {
-    interface Request {
+import 'express-session';
+import { JwtPayload } from '../middleware/jwt.middleware';
+
+declare module 'express-session' {
+    interface SessionData {
         user?: {
             id: number;
-            email: string;
-        };
+            username: string;
+        }
+    }
+}
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: {
+                id: number;
+                username: string;
+                email?: string;
+            };
+        }
     }
 }
 

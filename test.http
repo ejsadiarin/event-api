@@ -1,0 +1,109 @@
+# Replace this with the actual token after logging in
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwidXNlcm5hbWUiOiJuZXd1c2VyIiwiZW1haWwiOiJuZXd1c2VyQGV4YW1wbGUuY29tIiwiaWF0IjoxNzQ1NzQxMDQ5LCJleHAiOjE3NDU4Mjc0NDl9.It6inxLfPObuaIb4-pHi08LdUAwTEptsloBJ8ugyw5E
+
+### =============================================
+### AUTHENTICATION TESTS
+### =============================================
+
+### Register a new user
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "newuser",
+  "password": "securepassword",
+  "email": "newuser@example.com"
+}
+
+### Login with the new user
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "newuser",
+  "password": "securepassword"
+}
+
+### Get user profile (protected route)
+GET http://localhost:3000/api/auth/profile
+Authorization: Bearer {{token}}
+
+### Logout
+POST http://localhost:3000/api/auth/logout
+
+### =============================================
+### ORGANIZATION TESTS
+### =============================================
+
+### Get all organizations
+GET http://localhost:3000/api/organizations
+
+### Get organization by ID
+GET http://localhost:3000/api/organizations/2
+
+### Create a new organization
+POST http://localhost:3000/api/organizations
+Content-Type: application/json
+
+{
+  "name": "AI Research Institute",
+  "org_logo": "ai_logo.png",
+  "top_web_url": "https://airesearch.org",
+  "background_pub_url": "https://airesearch.org/bg.jpg"
+}
+
+### Update an organization
+PUT http://localhost:3000/api/organizations/3
+Content-Type: application/json
+
+{
+  "name": "Advanced AI Research Institute",
+  "top_web_url": "https://advancedai.org"
+}
+
+### Delete an organization (will succeed if it has no events)
+DELETE http://localhost:3000/api/organizations/3
+
+### =============================================
+### EVENT TESTS
+### =============================================
+
+### Get all events
+GET http://localhost:3000/api/events
+
+### Get available slots for all events
+GET http://localhost:3000/api/events/slots
+
+### Get available slots for a specific event
+GET http://localhost:3000/api/events/slots/1
+
+### Get user's registered events (protected route)
+GET http://localhost:3000/api/events/user/registrations
+Authorization: Bearer {{token}}
+
+### Check if user is registered for an event
+GET http://localhost:3000/api/events/2/check-registration
+Authorization: Bearer {{token}}
+
+### Register for an event with authentication
+POST http://localhost:3000/api/events/2/register
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### Create an event with authentication
+POST http://localhost:3000/api/events
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Mobile Development Masterclass",
+  "description": "Learn to build cross-platform mobile apps",
+  "org_id": 2,
+  "venue": "Mobile Tech Campus",
+  "schedule": "2023-12-10T13:00:00.000Z",
+  "is_free": true,
+  "code": "MOBILE2023",
+  "max_capacity": 50
+}

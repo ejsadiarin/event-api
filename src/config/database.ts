@@ -5,7 +5,7 @@ import path from 'path';
 let pool: mysql.Pool;
 
 export const initDB = async () => {
-    // Create initial connection to create database
+    // temp pool for init
     const tempPool = mysql.createPool({
         host: process.env.MYSQL_HOST,
         user: process.env.MYSQL_USER,
@@ -13,11 +13,10 @@ export const initDB = async () => {
         multipleStatements: true,
     });
 
-    // Create database if not exists
     await tempPool.query(`CREATE DATABASE IF NOT EXISTS ${process.env.MYSQL_DATABASE}`);
     await tempPool.end();
 
-    // Create main connection pool
+    // global main connection pool
     pool = mysql.createPool({
         host: process.env.MYSQL_HOST,
         user: process.env.MYSQL_USER,
@@ -29,15 +28,14 @@ export const initDB = async () => {
         multipleStatements: true
     });
 
-    // Determine the correct path to the migrations file
     let migrationPath;
-    // Check if we're in production (compiled) or development environment
+    // check if we're in production (compiled) or development environment
     if (fs.existsSync(path.join(__dirname, '../migrations/init.sql'))) {
-        // Development path
+        // dev path
         migrationPath = path.join(__dirname, '../migrations/init.sql');
     } else {
-        // Production path (after esbuild)
-        migrationPath = path.join(__dirname, '../../src/migrations/init.sql');  // Try this alternative path
+        // prod path (after esbuild)
+        migrationPath = path.join(__dirname, '../../src/migrations/init.sql');
     }
 
     console.log('Using migration path:', migrationPath);

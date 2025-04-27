@@ -23,7 +23,7 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - leap-network-sample
@@ -51,6 +51,7 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
+      start_period: 15s
     networks:
       - leap-network-sample
     restart: unless-stopped

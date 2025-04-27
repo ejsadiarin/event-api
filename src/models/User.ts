@@ -17,7 +17,7 @@ class UserModel {
         const hashedPassword = await bcrypt.hash(user.password, SALT_ROUNDS);
         const [result] = await pool.query(
             'INSERT INTO users (username, password, email, display_picture) VALUES (?, ?, ?, ?)',
-            [user.username, hashedPassword, user.email, user.display_picture]
+            [user.username, hashedPassword, user.email || null, user.display_picture || null]
         );
         return { id: (result as any).insertId, ...user };
     }
@@ -37,3 +37,4 @@ class UserModel {
 }
 
 export default UserModel;
+export type { User };
