@@ -4,17 +4,43 @@ import path from 'path';
 
 let pool: mysql.Pool;
 
-export const initDB = async () => {
-    // temp pool for init
-    const tempPool = mysql.createPool({
-        host: process.env.MYSQL_HOST,
-        user: process.env.MYSQL_USER,
-        password: process.env.MYSQL_PASSWORD,
-        multipleStatements: true,
-    });
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    await tempPool.query(`CREATE DATABASE IF NOT EXISTS ${process.env.MYSQL_DATABASE}`);
-    await tempPool.end();
+export const initDB = async () => {
+    let retries = 5;
+    let lastError: any;
+    let connected = false;
+
+    while (retries > 0 && !connected) {
+        try {
+            // temp pool for init
+            const tempPool = mysql.createPool({
+                host: process.env.MYSQL_HOST,
+                user: process.env.MYSQL_USER,
+                password: process.env.MYSQL_PASSWORD,
+                multipleStatements: true,
+                connectTimeout: 10000, // 10 seconds timeout
+            });
+
+            await tempPool.query(`CREATE DATABASE IF NOT EXISTS ${process.env.MYSQL_DATABASE}`);
+            await tempPool.end();
+            connected = true;
+        } catch (error) {
+            lastError = error;
+            retries--;
+            if (retries > 0) {
+                // calculate delay with exponential backoff (1s, 2s, 4s, 8s...)
+                const delay = Math.pow(2, 5 - retries) * 1000;
+                console.log(`Connection to MySQL failed, retrying in ${delay / 1000}s... (${retries} attempts left)`);
+                await sleep(delay);
+            }
+        }
+    }
+
+    if (!connected) {
+        console.error('Failed to connect to MySQL after multiple attempts:', lastError);
+        throw lastError;
+    }
 
     // global main connection pool
     pool = mysql.createPool({

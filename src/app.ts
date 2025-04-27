@@ -5,25 +5,26 @@ import { initializeEventSlots } from './config/redis';
 import eventsRouter from './routes/events';
 import authRouter from './routes/auth';
 import organizationsRouter from './routes/organizations';
+import healthcheckRouter from './routes/health';
 import { configureSession } from './config/session';
 
 
 const startServer = async () => {
     const app = express();
 
-    // Initialize database first
+    // initialize database first
     await initDB();
     console.log('Database initialized');
 
-    // Then initialize Redis
+    // then initialize Redis
     await initializeEventSlots();
     console.log('Redis initialized');
 
-    // Configure session
+    // configure session
     await configureSession(app);
     console.log('Session configured');
 
-    // Middleware and routes
+    // middleware and routes
     app.use(cors({
         origin: process.env.CORS_ORIGIN || '*',
         credentials: true
@@ -33,6 +34,8 @@ const startServer = async () => {
     app.use('/api/auth', authRouter);
     app.use('/api/events', eventsRouter);
     app.use('/api/organizations', organizationsRouter);
+    app.use('/api/health', healthcheckRouter);
+
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {

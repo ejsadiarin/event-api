@@ -33,7 +33,7 @@ export const registerForEvent: RequestHandler = async (req, res) => {
     const connection = await pool.getConnection();
     const eventId = parseInt(req.params.id as string);
 
-    // Get user ID from JWT token (added by middleware)
+    // get user ID from JWT token (added by middleware)
     if (!req.user || !req.user.id) {
         res.status(401).json({ error: 'Authentication required' });
     }
@@ -43,7 +43,7 @@ export const registerForEvent: RequestHandler = async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // Check if the user is already registered for this event
+        // existence checks for user, events
         const [existingRegistrations] = await connection.query(
             'SELECT id FROM registrations WHERE user_id = ? AND event_id = ?',
             [userId, eventId]
@@ -54,7 +54,6 @@ export const registerForEvent: RequestHandler = async (req, res) => {
             res.status(400).json({ error: 'User already registered for this event' });
         }
 
-        // Check if the event exists
         const [eventRows] = await connection.query(
             'SELECT id FROM events WHERE id = ?',
             [eventId]
@@ -65,7 +64,7 @@ export const registerForEvent: RequestHandler = async (req, res) => {
             res.status(404).json({ error: 'Event not found' });
         }
 
-        // Decrement available slots
+        // if good, then decrement slots on event in redis
         const availableSlots = await redisClient.decr(`event:${eventId}:slots`);
 
         if (availableSlots < 0) {
@@ -74,14 +73,14 @@ export const registerForEvent: RequestHandler = async (req, res) => {
             res.status(400).json({ error: 'No slots available' });
         }
 
-        // Create registration
+        // then write to registrations table
         await connection.query(
             `INSERT INTO registrations (user_id, event_id) 
              VALUES (?, ?)`,
             [userId, eventId]
         );
 
-        // Update event registered count
+        // TODO: see if this is necessary
         await connection.query(
             `UPDATE events 
              SET registered_count = registered_count + 1 
@@ -118,7 +117,6 @@ export const createEvent: RequestHandler = async (req, res) => {
             max_capacity
         } = req.body;
 
-        // Validate required fields
         if (!title || !org_id || !venue || !schedule || !max_capacity) {
             res.status(400).json({ error: 'Missing required fields' });
         }
@@ -128,7 +126,6 @@ export const createEvent: RequestHandler = async (req, res) => {
             .slice(0, 19)
             .replace('T', ' ');
 
-        // Insert new event with the formatted date
         const [result] = await pool.query(
             `INSERT INTO events 
             (title, description, org_id, venue, schedule, is_free, code, max_capacity) 
@@ -138,7 +135,7 @@ export const createEvent: RequestHandler = async (req, res) => {
 
         const eventId = (result as any).insertId;
 
-        // Initialize slots in Redis
+        // then init slots of this event in Redis
         await redisClient.set(`event:${eventId}:slots`, max_capacity.toString());
 
         res.status(201).json({
@@ -187,11 +184,22 @@ export const getEventSlots: RequestHandler = async (req, res) => {
         const eventId = req.params.id ? parseInt(req.params.id) : null;
 
         if (eventId) {
-            // Get slots for a specific event
+            // get slots for a specific event (if eventId is provided)
+            const pool = getPool();
+
+            // check first if event exists in db
+            const [eventRows] = await pool.query(
+                'SELECT id FROM events WHERE id = ?',
+                [eventId]
+            );
+            if ((eventRows as any[]).length === 0) {
+                res.status(404).json({ error: 'Event not found' });
+            }
+
             const slots = await redisClient.get(`event:${eventId}:slots`);
             res.json({ eventId, slots: parseInt(slots || '0') });
         } else {
-            // Get slots for all events
+            // get slots for all events (by default)
             const pool = getPool();
             const [events] = await pool.query('SELECT id FROM events');
 

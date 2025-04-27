@@ -24,6 +24,7 @@ class EventModel {
         return rows as Event[];
     }
 
+    // better to use redis than this (this uses db, but for high load/traffic may be a bottle neck before of db I/O capacity)
     static async incrementRegistration(eventId: number): Promise<void> {
         const pool = getPool();
         await pool.query(
