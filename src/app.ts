@@ -7,6 +7,7 @@ import authRouter from './routes/auth';
 import organizationsRouter from './routes/organizations';
 import healthcheckRouter from './routes/health';
 import { configureSession } from './config/session';
+import { startSyncJob } from 'jobs/syncRedisToDb';
 
 const startServer = async () => {
   const app = express();
@@ -37,7 +38,9 @@ const startServer = async () => {
   app.use('/api/organizations', organizationsRouter);
   app.use('/api/health', healthcheckRouter);
 
-  const PORT = process.env.PORT || 3000;
+  startSyncJob();
+
+  const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
