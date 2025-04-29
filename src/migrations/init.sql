@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS events (
   code VARCHAR(10) UNIQUE,
   registered_count INT DEFAULT 0,
   max_capacity INT NOT NULL,
+  available_slots INT GENERATED ALWAYS AS (max_capacity - registered_count) STORED, -- generated columns for mysql versions (5.7+) or mariadb 10.2+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (org_id) REFERENCES organizations(id)
 );

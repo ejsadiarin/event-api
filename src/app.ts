@@ -7,7 +7,7 @@ import authRouter from './routes/auth';
 import organizationsRouter from './routes/organizations';
 import healthcheckRouter from './routes/health';
 import { configureSession } from './config/session';
-import { startSyncJob } from 'jobs/syncRedisToDb';
+import { startSyncJob } from './jobs/syncRedisToDb';
 
 const startServer = async () => {
   const app = express();
@@ -39,6 +39,7 @@ const startServer = async () => {
   app.use('/api/health', healthcheckRouter);
 
   startSyncJob();
+  console.log('Background jobs started');
 
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
