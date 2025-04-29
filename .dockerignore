@@ -2,3 +2,8 @@ node_modules
 Dockerfile
 docker-compose.yml
 .env
+.git
+.github
+.vscode
+coverage
+test

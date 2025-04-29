@@ -4,8 +4,19 @@ This API provides endpoints for managing events and user registrations. It uses 
 
 ### Usage:
 
-- For production: `docker compose up`
-- For development: `docker compose --profile dev up`
+- For development: `docker compose up -d --build`
+
+#### Flow (for testing locally when developing)
+
+- register user
+- login user
+- create org (event needs this)
+- create event
+- register to an event
+- check all events
+- check slots of all event
+- check slots of a specific event
+- check if current user is registered to a specific event
 
 ### Events
 

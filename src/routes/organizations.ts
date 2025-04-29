@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import {
-    getOrganizations,
-    getOrganizationById,
-    createOrganization,
-    updateOrganization,
-    deleteOrganization
+  getOrganizations,
+  getOrganizationById,
+  createOrganization,
+  updateOrganization,
+  deleteOrganization,
 } from '../controllers/organizations';
 
 const router = Router();

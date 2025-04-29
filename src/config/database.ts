@@ -7,85 +7,87 @@ let pool: mysql.Pool;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const initDB = async () => {
-    let retries = 5;
-    let lastError: any;
-    let connected = false;
+  let retries = 5;
+  let lastError: any;
+  let connected = false;
 
-    while (retries > 0 && !connected) {
-        try {
-            // temp pool for init
-            const tempPool = mysql.createPool({
-                host: process.env.MYSQL_HOST,
-                user: process.env.MYSQL_USER,
-                password: process.env.MYSQL_PASSWORD,
-                multipleStatements: true,
-                connectTimeout: 10000, // 10 seconds timeout
-            });
-
-            await tempPool.query(`CREATE DATABASE IF NOT EXISTS ${process.env.MYSQL_DATABASE}`);
-            await tempPool.end();
-            connected = true;
-        } catch (error) {
-            lastError = error;
-            retries--;
-            if (retries > 0) {
-                // calculate delay with exponential backoff (1s, 2s, 4s, 8s...)
-                const delay = Math.pow(2, 5 - retries) * 1000;
-                console.log(`Connection to MySQL failed, retrying in ${delay / 1000}s... (${retries} attempts left)`);
-                await sleep(delay);
-            }
-        }
-    }
-
-    if (!connected) {
-        console.error('Failed to connect to MySQL after multiple attempts:', lastError);
-        throw lastError;
-    }
-
-    // global main connection pool
-    pool = mysql.createPool({
+  while (retries > 0 && !connected) {
+    try {
+      // temp pool for init
+      const tempPool = mysql.createPool({
         host: process.env.MYSQL_HOST,
         user: process.env.MYSQL_USER,
         password: process.env.MYSQL_PASSWORD,
-        database: process.env.MYSQL_DATABASE,
-        waitForConnections: true,
-        connectionLimit: 10,
-        namedPlaceholders: true,
-        multipleStatements: true
-    });
+        multipleStatements: true,
+        connectTimeout: 10000, // 10 seconds timeout
+      });
 
-    let migrationPath;
-    // check if we're in production (compiled) or development environment
-    if (fs.existsSync(path.join(__dirname, '../migrations/init.sql'))) {
-        // dev path
-        migrationPath = path.join(__dirname, '../migrations/init.sql');
-    } else {
-        // prod path (after esbuild)
-        migrationPath = path.join(__dirname, '../../src/migrations/init.sql');
-    }
-
-    console.log('Using migration path:', migrationPath);
-
-    if (!fs.existsSync(migrationPath)) {
-        console.error('Migration file not found at:', migrationPath);
-        throw new Error(`Migration file not found at: ${migrationPath}`);
-    }
-
-    const sql = fs.readFileSync(migrationPath, 'utf8');
-
-    try {
-        // Execute SQL with multiple statements
-        await pool.query(sql);
-        console.log('Database migrations executed successfully');
+      await tempPool.query(`CREATE DATABASE IF NOT EXISTS ${process.env.MYSQL_DATABASE}`);
+      await tempPool.end();
+      connected = true;
     } catch (error) {
-        console.error('Error executing migrations:', error);
-        throw error;
+      lastError = error;
+      retries--;
+      if (retries > 0) {
+        // calculate delay with exponential backoff (1s, 2s, 4s, 8s...)
+        const delay = Math.pow(2, 5 - retries) * 1000;
+        console.log(
+          `Connection to MySQL failed, retrying in ${delay / 1000}s... (${retries} attempts left)`,
+        );
+        await sleep(delay);
+      }
     }
+  }
 
-    return pool;
+  if (!connected) {
+    console.error('Failed to connect to MySQL after multiple attempts:', lastError);
+    throw lastError;
+  }
+
+  // global main connection pool
+  pool = mysql.createPool({
+    host: process.env.MYSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database: process.env.MYSQL_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    namedPlaceholders: true,
+    multipleStatements: true,
+  });
+
+  let migrationPath;
+  // check if we're in production (compiled) or development environment
+  if (fs.existsSync(path.join(__dirname, '../migrations/init.sql'))) {
+    // dev path
+    migrationPath = path.join(__dirname, '../migrations/init.sql');
+  } else {
+    // prod path (after esbuild)
+    migrationPath = path.join(__dirname, '../../src/migrations/init.sql');
+  }
+
+  console.log('Using migration path:', migrationPath);
+
+  if (!fs.existsSync(migrationPath)) {
+    console.error('Migration file not found at:', migrationPath);
+    throw new Error(`Migration file not found at: ${migrationPath}`);
+  }
+
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+
+  try {
+    // Execute SQL with multiple statements
+    await pool.query(sql);
+    console.log('Database migrations executed successfully');
+  } catch (error) {
+    console.error('Error executing migrations:', error);
+    throw error;
+  }
+
+  return pool;
 };
 
 export const getPool = () => {
-    if (!pool) throw new Error('Database pool not initialized');
-    return pool;
+  if (!pool) throw new Error('Database pool not initialized');
+  return pool;
 };

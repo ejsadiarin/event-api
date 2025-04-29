@@ -72,34 +72,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # Add development service for local development
-  app-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - MYSQL_HOST=mysql
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=root
-      - MYSQL_DATABASE=leap_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - JWT_SECRET=secretsecret
-      - PORT=3000
-    volumes:
-      - .:/app
-      - /app/node_modules
-    depends_on:
-      - mysql
-      - redis
-    networks:
-      - leap-network-sample
-    profiles:
-      - dev
-
 volumes:
   mysql-data:
   redis-data:

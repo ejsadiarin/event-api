@@ -1,5 +1,12 @@
 import { Router } from 'express';
-import { getEvents, registerForEvent, createEvent, getUserRegistrations, getEventSlots, checkEventRegistration } from '../controllers/events';
+import {
+  getEvents,
+  registerForEvent,
+  createEvent,
+  getUserRegistrations,
+  getEventSlots,
+  checkEventRegistration,
+} from '../controllers/events';
 import { verifyToken } from '../middleware/jwt.middleware';
 
 const router = Router();
