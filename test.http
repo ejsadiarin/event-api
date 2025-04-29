@@ -1,22 +1,23 @@
 # Replace this with the actual token after logging in
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJuZXd1c2VyMiIsImVtYWlsIjoibmV3dXNlcjJAZXhhbXBsZS5jb20iLCJpYXQiOjE3NDU5MTE2NzAsImV4cCI6MTc0NTk5ODA3MH0.2nn9FL7kF4laBOuHMClkKyWeqGubZJ9AS7N2Q_ftXPw
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywidXNlcm5hbWUiOiJ0aHJvd2F3YXkiLCJlbWFpbCI6InRocm93YXdheUB0ZXN0LmNvbSIsImlhdCI6MTc0NTk0ODg4MiwiZXhwIjoxNzQ2MDM1MjgyfQ.ClGYXJ25ey2BUt3yjhH2MQdemq01ueJB9LYYnI3TBYs
+@baseUrl = http://localhost:3001
 
 ### =============================================
 ### HEALTH CHECKS
 ### =============================================
 
 ### Ready
-GET http://localhost:3000/api/health/ready
+GET {{ baseUrl }}/api/health/ready
 
 ### Live
-GET http://localhost:3000/api/health/live
+GET {{ baseUrl }}/api/health/live
 
 ### =============================================
 ### AUTHENTICATION TESTS
 ### =============================================
 
 ### Register a new user
-POST http://localhost:3000/api/auth/register
+POST {{ baseUrl }}/api/auth/register
 Content-Type: application/json
 
 {
@@ -26,7 +27,7 @@ Content-Type: application/json
 }
 
 ### Login with the new user
-POST http://localhost:3000/api/auth/login
+POST {{ baseUrl }}/api/auth/login
 Content-Type: application/json
 
 {
@@ -34,25 +35,43 @@ Content-Type: application/json
   "password": "securepassword2"
 }
 
+### Login with the user: test
+POST {{ baseUrl }}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "test",
+  "password": "test"
+}
+
+### Login with the user: throwaway
+POST {{ baseUrl }}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "throwaway",
+  "password": "ttt"
+}
+
 ### Get user profile (protected route)
-GET http://localhost:3000/api/auth/profile
+GET {{ baseUrl }}/api/auth/profile
 Authorization: Bearer {{token}}
 
 ### Logout
-POST http://localhost:3000/api/auth/logout
+POST {{ baseUrl }}/api/auth/logout
 
 ### =============================================
 ### ORGANIZATION TESTS
 ### =============================================
 
 ### Get all organizations
-GET http://localhost:3000/api/organizations
+GET {{ baseUrl }}/api/organizations
 
 ### Get organization by ID
-GET http://localhost:3000/api/organizations/1
+GET {{ baseUrl }}/api/organizations/1
 
 ### Create a new organization
-POST http://localhost:3000/api/organizations
+POST {{ baseUrl }}/api/organizations
 Content-Type: application/json
 
 {
@@ -63,7 +82,7 @@ Content-Type: application/json
 }
 
 ### Update an organization
-PUT http://localhost:3000/api/organizations/3
+PUT {{ baseUrl }}/api/organizations/3
 Content-Type: application/json
 
 {
@@ -72,38 +91,38 @@ Content-Type: application/json
 }
 
 ### Delete an organization (will succeed if it has no events)
-DELETE http://localhost:3000/api/organizations/1
+DELETE {{ baseUrl }}/api/organizations/1
 
 ### =============================================
 ### EVENT TESTS
 ### =============================================
 
 ### Get all events
-GET http://localhost:3000/api/events
+GET {{ baseUrl }}/api/events
 
 ### Get available slots for all events
-GET http://localhost:3000/api/events/slots
+GET {{ baseUrl }}/api/events/slots
 
 ### Get available slots for a specific event
-GET http://localhost:3000/api/events/2/slots
+GET {{ baseUrl }}/api/events/2/slots
 
 ### Get user's registered events (protected route)
-GET http://localhost:3000/api/events/user/registrations
+GET {{ baseUrl }}/api/events/user/registrations
 Authorization: Bearer {{token}}
 
 ### Check if user is registered for an event
-GET http://localhost:3000/api/events/2/check-registration
+GET {{ baseUrl }}/api/events/2/check-registration
 Authorization: Bearer {{token}}
 
 ### Register for an event with authentication
-POST http://localhost:3000/api/events/2/register
+POST {{ baseUrl }}/api/events/2/register
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {}
 
 ### Create an event with authentication
-POST http://localhost:3000/api/events
+POST {{ baseUrl }}/api/events
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -116,4 +135,37 @@ Content-Type: application/json
   "is_free": true,
   "code": "MOBILE1",
   "max_capacity": 500
+}
+
+### =============================================
+### USER PROFILE OPERATIONS
+### =============================================
+
+### Update user profile
+PUT {{ baseUrl }}/api/auth/profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "email": "updated-email@example.com",
+  "display_picture": "https://example.com/new-avatar.jpg"
+}
+
+### Change user password
+PUT {{ baseUrl }}/api/auth/password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "currentPassword": "ttt",
+  "newPassword": "secure"
+}
+
+### Delete user account (requires password confirmation)
+DELETE {{ baseUrl }}/api/auth/account
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "password": "securepassword2"
 }
