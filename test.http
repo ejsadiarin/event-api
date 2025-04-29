@@ -1,5 +1,5 @@
 # Replace this with the actual token after logging in
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywidXNlcm5hbWUiOiJ0aHJvd2F3YXkiLCJlbWFpbCI6InRocm93YXdheUB0ZXN0LmNvbSIsImlhdCI6MTc0NTk0ODg4MiwiZXhwIjoxNzQ2MDM1MjgyfQ.ClGYXJ25ey2BUt3yjhH2MQdemq01ueJB9LYYnI3TBYs
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJ0ZXN0IiwiZW1haWwiOiJ0ZXN0QHRlc3QuY29tIiwiaWF0IjoxNzQ1OTU4MTU2LCJleHAiOjE3NDYwNDQ1NTZ9.xqTnQ8FRjhInpklquJdMDpsa_NMM_ipX93nM_nRb0r8
 @baseUrl = http://localhost:3001
 
 ### =============================================
@@ -169,3 +169,18 @@ Content-Type: application/json
 {
   "password": "securepassword2"
 }
+
+### =============================================
+### MONITORING ENDPOINTS
+### =============================================
+
+### Get sync job metrics
+GET {{baseUrl}}/api/monitoring/sync-status
+
+### Get system status (admin only)
+GET {{baseUrl}}/api/monitoring/system
+Authorization: Bearer {{token}}
+
+### Trigger full reconciliation (admin only)
+POST {{baseUrl}}/api/monitoring/reconcile
+Authorization: Bearer {{token}}

@@ -6,6 +6,7 @@ import eventsRouter from './routes/events';
 import authRouter from './routes/auth';
 import organizationsRouter from './routes/organizations';
 import healthcheckRouter from './routes/health';
+import monitoringRouter from './routes/monitoring';
 import { configureSession } from './config/session';
 import { startSyncJob } from './jobs/syncRedisToDb';
 
@@ -37,6 +38,7 @@ const startServer = async () => {
   app.use('/api/events', eventsRouter);
   app.use('/api/organizations', organizationsRouter);
   app.use('/api/health', healthcheckRouter);
+  app.use('/api/monitoring', monitoringRouter);
 
   startSyncJob();
   console.log('Background jobs started');

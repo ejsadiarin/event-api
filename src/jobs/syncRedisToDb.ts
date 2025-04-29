@@ -32,11 +32,11 @@ const metrics = {
   lastDuration: 0,
 };
 
-// State management
+// State management (why not use Go with mutex?!?!??)
 let isSyncRunning = false;
 
 export function startSyncJob(): void {
-  // Initial sync
+  // initial sync
   setTimeout(async () => {
     console.log('Starting initial Redis sync');
     await runSyncTask();
@@ -140,20 +140,38 @@ async function syncSlotsWithDatabase(): Promise<void> {
   }
 }
 
-async function updateChunk(connection: PoolConnection, chunk: SlotUpdate[]): Promise<void> {
+async function updateChunk(connection: any, chunk: SlotUpdate[]): Promise<void> {
   let caseClause = '';
   const caseParams: number[] = [];
   const whereIds: number[] = [];
 
+  // first, get current max_capacity for these events
+  const idPlaceholders = chunk.map(() => '?').join(',');
+  const eventIds = chunk.map(update => update.id);
+
+  const [events] = await connection.query(
+    `SELECT id, max_capacity FROM events WHERE id IN (${idPlaceholders})`,
+    eventIds,
+  );
+
+  const eventMap = new Map<number, number>();
+  (events as any[]).forEach(event => {
+    eventMap.set(event.id, event.max_capacity);
+  });
+
+  // prepare to update registered_count instead of available_slots
   chunk.forEach(update => {
+    const maxCapacity = eventMap.get(update.id) || 0;
+    const newRegisteredCount = maxCapacity - update.redisSlots;
+
     caseClause += 'WHEN id = ? THEN ? ';
-    caseParams.push(update.id, update.redisSlots);
+    caseParams.push(update.id, newRegisteredCount);
     whereIds.push(update.id);
   });
 
   const query = `
     UPDATE events 
-    SET available_slots = CASE ${caseClause} END 
+    SET registered_count = CASE ${caseClause} END 
     WHERE id IN (${chunk.map(() => '?').join(',')})
   `;
 
@@ -197,8 +215,9 @@ export async function fullReconciliation(): Promise<void> {
         // Force Redis to match database calculations
         await redisClient.set(`event:${event.id}:slots`, dbSlots.toString());
 
-        await connection.query('UPDATE events SET available_slots = ? WHERE id = ?', [
-          dbSlots,
+        // update registered_count (available_slots will be auto-calculated, cannot update a generated column like available_slots directly)
+        await connection.query('UPDATE events SET registered_count = ? WHERE id = ?', [
+          event.registration_count,
           event.id,
         ]);
       }),
