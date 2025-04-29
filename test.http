@@ -1,5 +1,5 @@
 # Replace this with the actual token after logging in
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJuZXd1c2VyMiIsImVtYWlsIjoibmV3dXNlcjJAZXhhbXBsZS5jb20iLCJpYXQiOjE3NDU3NDkzNTMsImV4cCI6MTc0NTgzNTc1M30.bzM-mwq6sjP6yYNTAz2RTl8BmJFz4z41vEtcNuIAeJs
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJuZXd1c2VyMiIsImVtYWlsIjoibmV3dXNlcjJAZXhhbXBsZS5jb20iLCJpYXQiOjE3NDU5MTE2NzAsImV4cCI6MTc0NTk5ODA3MH0.2nn9FL7kF4laBOuHMClkKyWeqGubZJ9AS7N2Q_ftXPw
 
 ### =============================================
 ### HEALTH CHECKS
@@ -72,7 +72,7 @@ Content-Type: application/json
 }
 
 ### Delete an organization (will succeed if it has no events)
-DELETE http://localhost:3000/api/organizations/3
+DELETE http://localhost:3000/api/organizations/1
 
 ### =============================================
 ### EVENT TESTS
@@ -85,18 +85,18 @@ GET http://localhost:3000/api/events
 GET http://localhost:3000/api/events/slots
 
 ### Get available slots for a specific event
-GET http://localhost:3000/api/events/slots/1
+GET http://localhost:3000/api/events/2/slots
 
 ### Get user's registered events (protected route)
 GET http://localhost:3000/api/events/user/registrations
 Authorization: Bearer {{token}}
 
 ### Check if user is registered for an event
-GET http://localhost:3000/api/events/1/check-registration
+GET http://localhost:3000/api/events/2/check-registration
 Authorization: Bearer {{token}}
 
 ### Register for an event with authentication
-POST http://localhost:3000/api/events/1/register
+POST http://localhost:3000/api/events/2/register
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
@@ -108,12 +108,12 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "title": "Mobile Development Masterclass 2",
+  "title": "Mobile Development Masterclass",
   "description": "Learn to build cross-platform mobile apps",
   "org_id": 1,
   "venue": "Mobile Tech Campus",
   "schedule": "2023-12-10T13:00:00.000Z",
   "is_free": true,
-  "code": "MOBILE2",
+  "code": "MOBILE1",
   "max_capacity": 500
 }

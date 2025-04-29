@@ -7,7 +7,7 @@ const router = Router();
 // Public routes
 router.get('/', getEvents);
 router.get('/slots', getEventSlots);
-router.get('/slots/:id', getEventSlots);
+router.get('/:id/slots', getEventSlots);
 
 // Protected routes - require JWT authentication
 router.post('/', verifyToken, createEvent);
