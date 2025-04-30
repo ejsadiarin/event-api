@@ -37,10 +37,3 @@ jobs:
         run: npm run type-check
       - name: Run tests
         run: npm test
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          file: ./coverage/lcov.info
-          fail_ci_if_error: true
