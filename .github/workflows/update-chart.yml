@@ -1,0 +1,58 @@
+---
+name: Update Chart
+
+on:
+  repository_dispatch:
+    types: [update-api-chart]
+
+jobs:
+  update-chart:
+    name: Update Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Infrastructure Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/event-platform-infra
+          token: ${{ secrets.PAT_TOKEN }}
+          path: infra
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+
+      - name: Update Chart Version
+        env:
+          BRANCH: ${{ github.event.client_payload.branch }}
+          SHA: ${{ github.event.client_payload.sha }}
+          SHORT_SHA: ${{ github.event.client_payload.short_sha }}
+        run: |
+          cd infra/charts/event-api
+
+          # Get the current version
+          CURRENT_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+
+          # Increment patch version
+          PATCH=$((VERSION_PARTS[2] + 1))
+          NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+
+          # Update Chart.yaml
+          sed -i "s/^version:.*/version: $NEW_VERSION/" Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"sha-${SHORT_SHA:0:7}\"/" Chart.yaml
+
+          # Update values.yaml with new image tag
+          sed -i "s/tag:.*/tag: sha-${SHORT_SHA:0:7}/" values.yaml
+
+          # Check which environment is being updated
+          if [[ "$BRANCH" == "staging" ]]; then
+            ENVIRONMENT="staging"
+          else
+            ENVIRONMENT="production"
+          fi
+
+          # Commit changes
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Chart.yaml values.yaml
+          git commit -m "Update event-api chart to version $NEW_VERSION for $ENVIRONMENT (sha-${SHORT_SHA:0:7})"
+          git push
