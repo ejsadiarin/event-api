@@ -26,17 +26,17 @@ router.get('/sync-status', (_: Request, res: Response) => {
 // System health overview
 router.get('/system', adminAuth, async (_: Request, res: Response) => {
   try {
-    // Check Redis - safer implementation
+    // check redis
     let redisStatus = { connected: false, memory: 'unknown' };
     try {
-      // Type guard to check isReady property
+      // type guard
       const isReady =
-        typeof (redisClient as any).isReady === 'boolean' ? (redisClient as any).isReady : true; // Fallback if property doesn't exist
+        typeof (redisClient as any).isReady === 'boolean' ? (redisClient as any).isReady : true;
 
       if (isReady) {
         redisStatus.connected = true;
         try {
-          // Note: redis-client may implement info differently based on version
+          // NOTE: redis-client may implement info differently based on version
           const info = await redisClient.info();
           const memMatch = info.match(/used_memory_human:(.*)/);
           if (memMatch && memMatch[1]) {
@@ -50,11 +50,10 @@ router.get('/system', adminAuth, async (_: Request, res: Response) => {
       console.warn('Redis status check failed:', redisError);
     }
 
-    // Check Database - safer implementation
+    // check db
     let dbStatus = { connected: false, version: 'unknown' };
     try {
       const pool = getPool();
-      // Fix MySQL query typing
       const [rows] = await pool.query('SELECT VERSION() as version');
       const typedRows = rows as VersionRow[];
 
@@ -94,7 +93,7 @@ router.get('/system', adminAuth, async (_: Request, res: Response) => {
   }
 });
 
-// Trigger a full reconciliation (admin only)
+// trigger a full reconciliation (full forced data sync, admin only)
 router.post('/reconcile', adminAuth, async (_: Request, res: Response) => {
   try {
     await fullReconciliation();
