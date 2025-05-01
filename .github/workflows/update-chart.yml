@@ -25,34 +25,29 @@ jobs:
           BRANCH: ${{ github.event.client_payload.branch }}
           SHA: ${{ github.event.client_payload.sha }}
           SHORT_SHA: ${{ github.event.client_payload.short_sha }}
+          TAGS_JSON: ${{ github.event.client_payload.tags }}
         run: |
           cd infra/charts/event-api
 
-          # Get the current version
-          CURRENT_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
-          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          # Extract semver tags if available
+          SEMVER_TAG=$(echo "$TAGS_JSON" | jq -r '.tags[] | select(startswith("v")) | gsub("^v"; "")' | sort -V | tail -n1)
 
-          # Increment patch version
-          PATCH=$((VERSION_PARTS[2] + 1))
-          NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+          if [[ -n "$SEMVER_TAG" ]]; then
+            # Use semver tag directly
+            NEW_VERSION="$SEMVER_TAG"
+            IMAGE_TAG="v$SEMVER_TAG"
+          else
+            # Increment patch version
+            CURRENT_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+            IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+            PATCH=$((VERSION_PARTS[2] + 1))
+            NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+            IMAGE_TAG="sha-${SHORT_SHA:0:7}"
+          fi
 
           # Update Chart.yaml
           sed -i "s/^version:.*/version: $NEW_VERSION/" Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"sha-${SHORT_SHA:0:7}\"/" Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$IMAGE_TAG\"/" Chart.yaml
 
-          # Update values.yaml with new image tag
-          sed -i "s/tag:.*/tag: sha-${SHORT_SHA:0:7}/" values.yaml
-
-          # Check which environment is being updated
-          if [[ "$BRANCH" == "staging" ]]; then
-            ENVIRONMENT="staging"
-          else
-            ENVIRONMENT="production"
-          fi
-
-          # Commit changes
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add Chart.yaml values.yaml
-          git commit -m "Update event-api chart to version $NEW_VERSION for $ENVIRONMENT (sha-${SHORT_SHA:0:7})"
-          git push
+          # Update values.yaml
+          sed -i "s/tag:.*/tag: $IMAGE_TAG/" values.yaml
