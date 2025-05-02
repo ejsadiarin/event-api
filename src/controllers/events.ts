@@ -1,11 +1,14 @@
 import type { RequestHandler } from 'express';
-import { getPool } from '../config/database';
-import { redisClient } from '../config/redis';
+import { getPool, executeQuery } from '../config/database';
+import { redisClient, redisTracker } from '../config/redis';
+import { eventRegistrationTotal } from '../utils/metrics';
+import { requestLogger, LogLevel } from '../utils/logger';
 
-export const getEvents: RequestHandler = async (_, res) => {
+export const getEvents: RequestHandler = async (req, res) => {
   try {
+    requestLogger(req, 'Fetching all events');
     const pool = getPool();
-    const [events] = await pool.query(`
+    const [events] = await executeQuery<any[]>(`
             SELECT e.*, o.name AS org_name, o.org_logo 
             FROM events e
             JOIN organizations o ON e.org_id = o.id
@@ -13,7 +16,8 @@ export const getEvents: RequestHandler = async (_, res) => {
 
     const eventsWithSlots = await Promise.all(
       (events as any[]).map(async event => {
-        const slots = await redisClient.get(`event:${event.id}:slots`);
+        // use redisTracker (wrapper for redis metrics)
+        const slots = await redisTracker.get(`event:${event.id}:slots`);
         return {
           ...event,
           available_slots: parseInt(slots || event.max_capacity.toString()),
@@ -21,6 +25,7 @@ export const getEvents: RequestHandler = async (_, res) => {
       }),
     );
 
+    requestLogger(req, `Returned ${eventsWithSlots.length} events`);
     res.json(eventsWithSlots);
   } catch (error) {
     console.error('Error fetching events:', error);
@@ -41,6 +46,7 @@ export const registerForEvent: RequestHandler = async (req, res) => {
   const userId = req.user?.id!;
 
   try {
+    requestLogger(req, `User ${userId} attempting to register for event ${eventId}`, LogLevel.INFO);
     await connection.beginTransaction();
 
     // existence checks for user, events
@@ -62,10 +68,10 @@ export const registerForEvent: RequestHandler = async (req, res) => {
     }
 
     // if good, then decrement slots on event in redis
-    const availableSlots = await redisClient.decr(`event:${eventId}:slots`);
+    const availableSlots = await redisTracker.decr(`event:${eventId}:slots`);
 
     if (availableSlots < 0) {
-      await redisClient.incr(`event:${eventId}:slots`);
+      await redisTracker.incr(`event:${eventId}:slots`);
       await connection.rollback();
       res.status(400).json({ error: 'No slots available' });
     }
@@ -77,7 +83,7 @@ export const registerForEvent: RequestHandler = async (req, res) => {
       [userId, eventId],
     );
 
-    // TODO: see if this is necessary
+    // update registered_count
     await connection.query(
       `UPDATE events 
              SET registered_count = registered_count + 1 
@@ -86,12 +92,30 @@ export const registerForEvent: RequestHandler = async (req, res) => {
     );
 
     await connection.commit();
+
+    // increment registration counter metric
+    eventRegistrationTotal.inc({ event_id: eventId.toString() });
+
+    requestLogger(
+      req,
+      `User ${userId} registered for event ${eventId} successfully`,
+      LogLevel.INFO,
+      {
+        availableSlots,
+        eventId,
+      },
+    );
     res.json({ availableSlots });
   } catch (error) {
     await connection.rollback();
-    await redisClient.incr(`event:${eventId}:slots`);
+    await redisTracker.incr(`event:${eventId}:slots`);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    console.error('Registration error:', error);
+    requestLogger(req, `Registration failed for event ${eventId}`, LogLevel.ERROR, {
+      userId,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     const message = error instanceof Error ? error.message : 'Registration failed';
     res.status(500).json({ error: message });
   } finally {
@@ -110,7 +134,7 @@ export const createEvent: RequestHandler = async (req, res) => {
 
     const mysqlDatetime = new Date(schedule).toISOString().slice(0, 19).replace('T', ' ');
 
-    const [result] = await pool.query(
+    const [result] = await executeQuery<any[]>(
       `INSERT INTO events 
             (title, description, org_id, venue, schedule, is_free, code, max_capacity) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -120,7 +144,7 @@ export const createEvent: RequestHandler = async (req, res) => {
     const eventId = (result as any).insertId;
 
     // then init slots of this event in Redis
-    await redisClient.set(`event:${eventId}:slots`, max_capacity.toString());
+    await redisTracker.set(`event:${eventId}:slots`, max_capacity.toString());
 
     res.status(201).json({
       id: eventId,
@@ -143,7 +167,7 @@ export const getUserRegistrations: RequestHandler = async (req, res) => {
     const pool = getPool();
 
     // Get user's registered events with event details
-    const [registrations] = await pool.query(
+    const [registrations] = await executeQuery<any[]>(
       `
             SELECT 
                 e.id, e.title, e.description, e.venue, e.schedule, 
@@ -174,21 +198,24 @@ export const getEventSlots: RequestHandler = async (req, res) => {
       const pool = getPool();
 
       // check first if event exists in db
-      const [eventRows] = await pool.query('SELECT id FROM events WHERE id = ?', [eventId]);
+      const [eventRows] = await executeQuery<any[]>('SELECT id FROM events WHERE id = ?', [
+        eventId,
+      ]);
       if ((eventRows as any[]).length === 0) {
         res.status(404).json({ error: 'Event not found' });
+        return;
       }
 
-      const slots = await redisClient.get(`event:${eventId}:slots`);
+      const slots = await redisTracker.get(`event:${eventId}:slots`);
       res.json({ eventId, slots: parseInt(slots || '0') });
     } else {
       // get slots for all events (by default)
       const pool = getPool();
-      const [events] = await pool.query('SELECT id FROM events');
+      const [events] = await executeQuery<any[]>('SELECT id FROM events');
 
       const slotsData = await Promise.all(
         (events as any[]).map(async event => {
-          const slots = await redisClient.get(`event:${event.id}:slots`);
+          const slots = await redisTracker.get(`event:${event.id}:slots`);
           return {
             eventId: event.id,
             slots: parseInt(slots || '0'),
@@ -199,7 +226,7 @@ export const getEventSlots: RequestHandler = async (req, res) => {
       res.json(slotsData);
     }
   } catch (error) {
-    console.error('Error fetching Redis slots:', error);
+    console.error(`[${req.id}] Error fetching Redis slots:`, error);
     res.status(500).json({ error: 'Failed to fetch slot information' });
   }
 };
@@ -218,7 +245,7 @@ export const checkEventRegistration: RequestHandler = async (req, res) => {
     }
 
     const pool = getPool();
-    const [result] = await pool.query(
+    const [result] = await executeQuery<any[]>(
       'SELECT id FROM registrations WHERE user_id = ? AND event_id = ?',
       [userId, eventId],
     );

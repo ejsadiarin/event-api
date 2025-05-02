@@ -1,4 +1,4 @@
-import { getPool } from '../config/database';
+import { getPool, executeQuery } from '../config/database';
 import bcrypt from 'bcrypt';
 import { ResultSetHeader } from 'mysql2';
 
@@ -19,25 +19,27 @@ interface UserUpdate {
 
 class UserModel {
   static async create(user: User): Promise<User> {
-    const pool = getPool();
     const hashedPassword = await bcrypt.hash(user.password, SALT_ROUNDS);
-    const [result] = await pool.query(
+    const [result] = await executeQuery<[ResultSetHeader]>(
       'INSERT INTO users (username, password, email, display_picture) VALUES (?, ?, ?, ?)',
       [user.username, hashedPassword, user.email || null, user.display_picture || null],
     );
-    return { id: (result as any).insertId, ...user };
+
+    return { id: result.insertId, ...user };
   }
 
   static async findByUsername(username: string): Promise<User | null> {
-    const pool = getPool();
-    const [rows] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
-    return (rows as any[])[0] || null;
+    const [rows] = await executeQuery<[User[]]>('SELECT * FROM users WHERE username = ?', [
+      username,
+    ]);
+
+    return rows.length ? rows[0] : null;
   }
 
   static async findById(userId: number): Promise<User | null> {
-    const pool = getPool();
-    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
-    return (rows as any[])[0] || null;
+    const [rows] = await executeQuery<[User[]]>('SELECT * FROM users WHERE id = ?', [userId]);
+
+    return rows.length ? rows[0] : null;
   }
 
   static async verifyPassword(user: User, password: string): Promise<boolean> {

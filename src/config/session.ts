@@ -1,6 +1,7 @@
 import session from 'express-session';
 import { createClient } from 'redis';
 import { RedisStore } from 'connect-redis';
+import { activeSessionsGauge } from '../utils/metrics';
 
 export const configureSession = async (app: any) => {
   const redisClient = createClient({
@@ -13,6 +14,16 @@ export const configureSession = async (app: any) => {
     client: redisClient,
     prefix: 'session:',
   });
+
+  // Set up periodic session counting
+  setInterval(async () => {
+    try {
+      const sessionKeys = await redisClient.keys('session:*');
+      activeSessionsGauge.set(sessionKeys.length);
+    } catch (error) {
+      console.error('Error counting sessions:', error);
+    }
+  }, 60 * 1000);
 
   // session middleware
   app.use(

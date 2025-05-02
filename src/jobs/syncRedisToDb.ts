@@ -1,6 +1,6 @@
 import { PoolConnection, RowDataPacket } from 'mysql2/promise';
-import { getPool } from '../config/database';
-import { redisClient } from '../config/redis';
+import { getPool, executeQuery } from '../config/database';
+import { redisClient, redisTracker } from '../config/redis';
 
 // Configuration
 const SYNC_INTERVAL = process.env.SYNC_INTERVAL
@@ -72,7 +72,7 @@ async function runSyncTask(): Promise<void> {
 
 async function syncSlotsWithDatabase(): Promise<void> {
   const pool = getPool();
-  const [events] = await pool.query<EventRow[]>(
+  const [events] = await executeQuery<EventRow[]>(
     'SELECT id, max_capacity, registered_count FROM events',
   );
 
@@ -83,9 +83,9 @@ async function syncSlotsWithDatabase(): Promise<void> {
 
   // Parallel Redis reads
   const slotUpdates = await Promise.all(
-    events.map(async (event): Promise<SlotUpdate | null> => {
+    events.map(async (event: EventRow): Promise<SlotUpdate | null> => {
       try {
-        const redisSlots = await redisClient.get(`event:${event.id}:slots`);
+        const redisSlots = await redisTracker.get(`event:${event.id}:slots`);
         if (!redisSlots) return null;
 
         const redisCount = parseInt(redisSlots);
@@ -213,7 +213,7 @@ export async function fullReconciliation(): Promise<void> {
         const dbSlots = event.max_capacity - event.registered_count;
 
         // Force Redis to match database calculations
-        await redisClient.set(`event:${event.id}:slots`, dbSlots.toString());
+        await redisTracker.set(`event:${event.id}:slots`, dbSlots.toString());
 
         // update registered_count (available_slots will be auto-calculated, cannot update a generated column like available_slots directly)
         await connection.query('UPDATE events SET registered_count = ? WHERE id = ?', [

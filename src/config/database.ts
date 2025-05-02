@@ -1,6 +1,83 @@
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
+import { dbQueryDuration } from '../utils/metrics';
+import { v4 as uuidv4 } from 'uuid';
+
+export const executeQuery = async <T>(sql: string, params: any[] = []): Promise<T> => {
+  if (!pool) throw new Error('Database pool not initialized');
+
+  const table = extractTableFromQuery(sql);
+  const operation = extractOperationType(sql);
+  const queryId = uuidv4().substring(0, 8);
+
+  console.log(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'DEBUG',
+      message: 'Database query execution',
+      service: 'event-api',
+      queryId,
+      operation,
+      table,
+      sql: process.env.NODE_ENV === 'production' ? undefined : sql, // Only log SQL in non-production
+    }),
+  );
+
+  const timer = dbQueryDuration.startTimer();
+  try {
+    const result = await pool.query(sql, params);
+    return result as unknown as T;
+  } catch (error) {
+    console.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'ERROR',
+        message: 'Database query failed',
+        service: 'event-api',
+        queryId,
+        operation,
+        table,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      }),
+    );
+    throw error;
+  } finally {
+    timer({ operation, table });
+  }
+};
+
+// Helper function to extract table name from SQL
+const extractTableFromQuery = (sql: string): string => {
+  // Simple regex - will need refinement for complex queries
+  const fromMatch = sql.match(/FROM\s+(\w+)/i);
+  const intoMatch = sql.match(/INTO\s+(\w+)/i);
+  const updateMatch = sql.match(/UPDATE\s+(\w+)/i);
+  const deleteMatch = sql.match(/DELETE\s+FROM\s+(\w+)/i);
+
+  if (fromMatch) return fromMatch[1];
+  if (intoMatch) return intoMatch[1];
+  if (updateMatch) return updateMatch[1];
+  if (deleteMatch) return deleteMatch[1];
+
+  return 'unknown';
+};
+
+// Helper function to extract operation type
+const extractOperationType = (sql: string): string => {
+  const trimmedSql = sql.trim().toUpperCase();
+
+  if (trimmedSql.startsWith('SELECT')) return 'select';
+  if (trimmedSql.startsWith('INSERT')) return 'insert';
+  if (trimmedSql.startsWith('UPDATE')) return 'update';
+  if (trimmedSql.startsWith('DELETE')) return 'delete';
+  if (trimmedSql.startsWith('CREATE')) return 'create';
+  if (trimmedSql.startsWith('ALTER')) return 'alter';
+  if (trimmedSql.startsWith('DROP')) return 'drop';
+
+  return 'other';
+};
 
 let pool: mysql.Pool;
 

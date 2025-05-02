@@ -1,6 +1,9 @@
 import type { RequestHandler } from 'express';
 import UserModel from '../models/User';
 import jwt from 'jsonwebtoken';
+import { loginAttemptTotal, activeSessionsGauge } from '../utils/metrics';
+import { redisClient, redisTracker } from '../config/redis';
+import { requestLogger, LogLevel } from '../utils/logger';
 
 interface ProfileUpdateRequest {
   email?: string;
@@ -52,6 +55,8 @@ export const login: RequestHandler = async (req, res) => {
     const user = await UserModel.findByUsername(username);
 
     if (!user || !(await UserModel.verifyPassword(user, password))) {
+      // Record failed login attempt
+      loginAttemptTotal.inc({ status: 'failure' });
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
@@ -69,7 +74,18 @@ export const login: RequestHandler = async (req, res) => {
         id: user?.id as number,
         username: user?.username as string,
       };
+
+      // Store the session in Redis with a TTL
+      await redisTracker.set(`user:session:${user?.id}`, Date.now().toString());
+      // Set expiry time to match session lifetime (24 hours)
+      await redisClient.expire(`user:session:${user?.id}`, 24 * 60 * 60);
+
+      // Update active sessions count
+      await updateSessionCount();
     }
+
+    // Record successful login
+    loginAttemptTotal.inc({ status: 'success' });
 
     res.status(200).json({
       message: 'Login successful',
@@ -81,20 +97,38 @@ export const login: RequestHandler = async (req, res) => {
       token,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error(`[${req.id}] Login error:`, error);
     res.status(500).json({ error: 'Login failed' });
   }
 };
 
 export const logout: RequestHandler = (req, res) => {
+  // Get user ID before destroying session
+  const userId = req.user?.id || req.session?.user?.id;
+
   // session-based auth
   if (req.session) {
-    req.session.destroy(err => {
+    req.session.destroy(async err => {
       if (err) {
+        requestLogger(req, 'Session destruction failed during logout', LogLevel.ERROR, {
+          error: err,
+        });
         return res.status(500).json({ error: 'Logout failed' });
       }
-      res.clearCookie('connect.sid');
 
+      // Remove session tracking if we have a user ID
+      if (userId) {
+        try {
+          await redisClient.del(`user:session:${userId}`);
+          // Update session count
+          await updateSessionCount();
+          requestLogger(req, `User ${userId} logged out`, LogLevel.INFO);
+        } catch (redisError) {
+          requestLogger(req, 'Redis error during logout', LogLevel.ERROR, { error: redisError });
+        }
+      }
+
+      res.clearCookie('connect.sid');
       res.json({
         message: 'Logged out successfully',
         note: 'For JWT auth, please discard your token on the client side',
@@ -283,3 +317,106 @@ export const deleteAccount: RequestHandler = async (req, res) => {
     res.status(500).json({ error: message });
   }
 };
+
+// Implement a more robust session counting function
+async function updateSessionCount() {
+  try {
+    const sessionKeys = await redisClient.keys('user:session:*');
+
+    // Update the Prometheus gauge
+    activeSessionsGauge.set(sessionKeys.length);
+
+    // Log the current session count
+    console.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'INFO',
+        message: 'Active session count updated',
+        service: 'event-api',
+        activeSessions: sessionKeys.length,
+      }),
+    );
+
+    return sessionKeys.length;
+  } catch (error) {
+    console.error('Error updating session count:', error);
+    return 0;
+  }
+}
+
+// Replace the countActiveSessions function with more detailed implementation
+async function countActiveSessions(): Promise<number> {
+  try {
+    // Count user sessions
+    const userSessions = await redisClient.keys('user:session:*');
+
+    // Count Redis session store entries if using Redis session store
+    const redisSessionStoreKeys = await redisClient.keys('session:*');
+
+    // Log detailed counts for debugging
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'DEBUG',
+          message: 'Session counting details',
+          service: 'event-api',
+          userSessionCount: userSessions.length,
+          redisSessionCount: redisSessionStoreKeys.length,
+        }),
+      );
+    }
+
+    // Return user sessions count as the source of truth
+    return userSessions.length;
+  } catch (error) {
+    console.error('Error counting active sessions:', error);
+    return 0;
+  }
+}
+
+// Add a function to periodically check and clean up expired sessions
+// This should be called when the server starts
+export function startSessionMonitoring() {
+  const CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+  setInterval(async () => {
+    try {
+      // Get all user sessions
+      const sessionKeys = await redisClient.keys('user:session:*');
+      let expiredCount = 0;
+
+      // Check each session for validity
+      for (const key of sessionKeys) {
+        const userId = key.split(':')[2];
+        // Check if there's a corresponding session in the session store
+        const sessionExists = await redisClient.exists(`session:${userId}`);
+
+        if (!sessionExists) {
+          // If no corresponding session, delete the user session key
+          await redisClient.del(key);
+          expiredCount++;
+        }
+      }
+
+      // Update the session count after cleanup
+      await updateSessionCount();
+
+      console.log(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'INFO',
+          message: 'Session cleanup completed',
+          service: 'event-api',
+          expiredSessionsRemoved: expiredCount,
+          remainingSessions: await countActiveSessions(),
+        }),
+      );
+    } catch (error) {
+      console.error('Error during session cleanup:', error);
+    }
+  }, CLEANUP_INTERVAL);
+
+  // Initial count
+  updateSessionCount();
+}
