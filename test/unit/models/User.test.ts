@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import UserModel from '../../../src/models/User';
-import { getPool } from '../../../src/config/database';
+import { getPool, executeQuery } from '../../../src/config/database';
 import bcrypt from 'bcrypt';
+import { ResultSetHeader } from 'mysql2';
 
 vi.mock('bcrypt', () => ({
   default: {
@@ -10,9 +11,21 @@ vi.mock('bcrypt', () => ({
   },
 }));
 
+vi.mock('../../../src/config/database', () => ({
+  getPool: vi.fn(),
+  executeQuery: vi.fn(),
+}));
+
 describe('UserModel', () => {
   const mockPool = {
     query: vi.fn(),
+    getConnection: vi.fn().mockReturnValue({
+      query: vi.fn(),
+      beginTransaction: vi.fn(),
+      commit: vi.fn(),
+      rollback: vi.fn(),
+      release: vi.fn(),
+    }),
   };
 
   beforeEach(() => {
@@ -28,12 +41,22 @@ describe('UserModel', () => {
         email: 'test@example.com',
       };
 
-      mockPool.query.mockResolvedValueOnce([{ insertId: 1 }]);
+      // Mock executeQuery to return proper structure
+      vi.mocked(executeQuery).mockResolvedValueOnce([
+        {
+          insertId: 1,
+          affectedRows: 1,
+          fieldCount: 0,
+          info: '',
+          serverStatus: 0,
+          warningStatus: 0,
+        },
+      ] as unknown as [ResultSetHeader]);
 
       const result = await UserModel.create(mockUser);
 
       expect(bcrypt.hash).toHaveBeenCalledWith('testpassword', 10);
-      expect(mockPool.query).toHaveBeenCalledWith(
+      expect(executeQuery).toHaveBeenCalledWith(
         'INSERT INTO users (username, password, email, display_picture) VALUES (?, ?, ?, ?)',
         ['testuser', 'hashedpassword', 'test@example.com', null],
       );
@@ -55,18 +78,20 @@ describe('UserModel', () => {
         email: 'test@example.com',
       };
 
-      mockPool.query.mockResolvedValueOnce([[mockUser]]);
+      // Mock executeQuery to return rows properly structured
+      vi.mocked(executeQuery).mockResolvedValueOnce([[mockUser]] as unknown as [any[]]);
 
       const result = await UserModel.findByUsername('testuser');
 
-      expect(mockPool.query).toHaveBeenCalledWith('SELECT * FROM users WHERE username = ?', [
+      expect(executeQuery).toHaveBeenCalledWith('SELECT * FROM users WHERE username = ?', [
         'testuser',
       ]);
       expect(result).toEqual(mockUser);
     });
 
     it('should return null if user not found', async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+      // Return empty array of rows
+      vi.mocked(executeQuery).mockResolvedValueOnce([[]] as unknown as [any[]]);
 
       const result = await UserModel.findByUsername('nonexistentuser');
 

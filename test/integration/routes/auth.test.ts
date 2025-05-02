@@ -4,6 +4,19 @@ import express from 'express';
 import authRouter from '../../../src/routes/auth';
 import jwt from 'jsonwebtoken';
 import UserModel from '../../../src/models/User';
+import { requestLogger, LogLevel } from '../../../src/utils/logger';
+
+// Mock dependencies
+vi.mock('../../../src/utils/logger', () => ({
+  requestLogger: vi.fn(),
+  log: vi.fn(),
+  LogLevel: {
+    INFO: 'INFO',
+    ERROR: 'ERROR',
+    WARN: 'WARN',
+    DEBUG: 'DEBUG',
+  },
+}));
 
 vi.mock('../../../src/models/User', () => ({
   default: {
@@ -20,8 +33,33 @@ vi.mock('jsonwebtoken', () => ({
   },
 }));
 
+vi.mock('../../../src/config/redis', () => ({
+  redisClient: {
+    keys: vi.fn().mockResolvedValue(['session:1']),
+    del: vi.fn().mockResolvedValue(true),
+    exists: vi.fn().mockResolvedValue(true),
+    expire: vi.fn().mockResolvedValue(true),
+    set: vi.fn().mockResolvedValue(true),
+  },
+  redisTracker: {
+    set: vi.fn().mockResolvedValue(true),
+  },
+}));
+
 describe('Auth Routes', () => {
+  // Create Express app with middleware
   const app = express();
+
+  // Add middleware for request ID and session
+  app.use((req: any, res, next) => {
+    req.id = 'test-request-id';
+    req.session = {
+      destroy: vi.fn(callback => callback(null)),
+      user: null,
+    };
+    next();
+  });
+
   app.use(express.json());
   app.use('/api/auth', authRouter);
 

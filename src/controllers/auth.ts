@@ -135,6 +135,7 @@ export const logout: RequestHandler = (req, res) => {
       });
     });
   } else {
+    res.clearCookie('connect.sid');
     res.json({
       message: 'Logged out successfully',
       note: 'For JWT auth, please discard your token on the client side',
